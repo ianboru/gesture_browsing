@@ -1,0 +1,40 @@
+<html>
+  <head>
+    <title>Eye Scroller</title>
+    <style>
+      body {
+        width: 250px;
+        text-align: center;
+        background-color : black;
+      }
+      #calibrate{
+        color : white;
+        font-size : 20pt;
+        font-weight : bold;
+        background-color : blue;
+        margin-bottom: 15px;
+        border-radius : 4px;
+      }
+      .text{
+        margin-bottom: 15px;
+        color : white;
+      }
+      .bold{
+        font-weight : bold;
+      }
+      video{
+        margin-top : 15px;
+      }
+
+  </style>
+  </head>
+  <body>
+    <div>
+      <video autoplay="true" hidden=true id="webcamVideo" width="200" height="200"></video>
+    </div>
+    <div id="calibrate-text" class="text bold">Calibrate center eye height</div>
+    <button id="calibrate">Calibrate</button>
+    <div class="text">Please re-calibrate if you change screen angle or position</div> 
+    <script src="popup.js"></script>
+  </body>
+</html>
