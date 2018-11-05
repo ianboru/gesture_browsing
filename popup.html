@@ -5,7 +5,7 @@
       body {
         width: 250px;
         text-align: center;
-        background-color : black;
+        background-color : white;
       }
       #calibrate{
         color : white;
@@ -15,9 +15,15 @@
         margin-bottom: 15px;
         border-radius : 4px;
       }
-      .text{
+      .calibrate-text{
+        font-size : 20pt;
         margin-bottom: 15px;
-        color : white;
+        color : black;
+      }
+      .text{
+        font-size : 15pt;
+        margin-bottom: 15px;
+        color : black;
       }
       .bold{
         font-weight : bold;
@@ -32,7 +38,7 @@
     <div>
       <video autoplay="true" hidden=true id="webcamVideo" width="200" height="200"></video>
     </div>
-    <div id="calibrate-text" class="text bold">Calibrate center eye height</div>
+    <div id="calibrate-text" class="calibrate-text bold"></div>
     <button id="calibrate">Calibrate</button>
     <div class="text">Please re-calibrate if you change screen angle or position</div> 
     <script src="popup.js"></script>

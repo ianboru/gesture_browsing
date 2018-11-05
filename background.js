@@ -1,22 +1,3 @@
-/**
- * Copyright 2018 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the 'License');
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an 'AS IS' BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
- console.log(document.scripts)
-var imageScaleFactor = 0.5;
-var outputStride = 16;
-var flipHorizontal = false;
 // Do first-time setup to gain access to webcam, if necessary.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason.search(/install/g) === -1) {
@@ -28,6 +9,27 @@ chrome.runtime.onInstalled.addListener((details) => {
   });
 });
 
+var imageScaleFactor = 0.5;
+var outputStride = 16;
+var flipHorizontal = false;
+let topEyeY
+let bottomEyeY
+let eyeYRange 
+chrome.runtime.onMessage.addListener((request) => {
+    if(request.calibrateTop){
+      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+           topEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+       })
+    }
+    if(request.calibrateBottom){
+      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+           bottomEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+           console.log("eye y", topEyeY, bottomEyeY)
+           defaultY = mean([topEyeY, bottomEyeY])// - .1 * eyeYRange
+           eyeYRange = Math.abs(topEyeY - bottomEyeY)
+       })
+    }
+})
 const vid = document.querySelector('#webcamVideo');
 let net = null 
 // Setup webcam, initialize the KNN classifier model and start the work loop.
@@ -63,43 +65,7 @@ let bottomCalibrationEyeY = []
 let topCalibrationEyeY = []
 let meanTopEyeY = null
 let meanBottomEyeY = null
-chrome.extension.onConnect.addListener(function(port) {
-  console.log("Connected .....");
 
-  port.onMessage.addListener(function(msg) {
-     console.log("new message recieved" + msg);
-     calibrationStatus = msg
-     if(msg == "calibrate"){
-       net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           defaultY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-       })
-     }
-     if(msg == "calibrate-top"){
-        while(calibrationStatus == msg){
-          net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-                 topCalibrationEyeY.push(
-                  mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-                )
-          })
-        }
-     }
-     else if(msg == "calibrate-bottom"){
-        while(calibrationStatus == msg){
-          net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-            bottomCalibrationEyeY.push(
-              mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-            )
-          })
-        }
-     }else if(msg == "calibrate-done"){
-        meanTopEyeY = mean(topCalibrationEyeY)
-        meanBottomEyeY = mean(bottomCalibrationEyeY)
-        defaultY = mean([meanTopEyeY, meanBottomEyeY])
-        console.log("calibration done", meanTopEyeY, meanBottomEyeY, defaultY)
-     }
-     
-  });
-})
 // If cam acecss gets granted to this extension, setup webcam.
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('camAccess' in changes) {
@@ -130,99 +96,61 @@ function mean(array){
 function calculatDiff(array,offset){
   return array[array.length-1] - array[array.length + offset-1]
 }
+var timeoutId = 0 
 async function loop() {
   
-  if(net){
-     var queryInfo = {
-      active: true,
-      currentWindow: true
-    };
+  if(net && defaultY){
     let headGesture = false
-    if(defaultY){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-        const leftEyeY = pose.keypoints[1].position.y
-        const rightEyeY = pose.keypoints[2].position.y
-        const leftEyeX = pose.keypoints[1].position.x
-        const rightEyeX = pose.keypoints[2].position.x
-        const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
-        const diff = curEyeY-defaultY
-        if(numLoops % 7 == 0){
-          if(leftEyeXHistory.length > windowSize){
-            leftEyeXHistory.shift()
-            leftEyeYHistory.shift()
-            rightEyeXHistory.shift()
-            rightEyeYHistory.shift()
-            leftEyeVXHistory.shift()
-            leftEyeVYHistory.shift()
-            rightEyeVXHistory.shift()
-            rightEyeVYHistory.shift()
-          }
-          leftEyeXHistory.push(leftEyeX)
-          leftEyeYHistory.push(leftEyeY)
-          rightEyeXHistory.push(rightEyeX)
-          rightEyeYHistory.push(rightEyeY)
-          if(numLoops > 0){
-            let leftEyeVX = calculatDiff(leftEyeXHistory,-1)/windowSize
-            let leftEyeVY = calculatDiff(leftEyeYHistory,-1)/windowSize
-            let rightEyeVX = calculatDiff(rightEyeXHistory,-1)/windowSize
-            let rightEyeVY = calculatDiff(rightEyeYHistory,-1)/windowSize
-            leftEyeVXHistory.push(leftEyeVX)
-            leftEyeVYHistory.push(leftEyeVY)
-            rightEyeVXHistory.push(rightEyeVX)
-            rightEyeVYHistory.push(rightEyeVY)
-            let leftEyeAX = calculatDiff(leftEyeVXHistory,-1)/windowSize
-            let leftEyeAY = calculatDiff(leftEyeVYHistory,-1)/windowSize
-            let rightEyeAX = calculatDiff(rightEyeVXHistory,-1)/windowSize
-            let rightEyeAY = calculatDiff(rightEyeVYHistory,-1)/windowSize
-            
-            //console.log(leftEyeVX,leftEyeAX, leftEyeVY, rightEyeVY)
+        if(pose.keypoints[1].score > .6){
+          const leftEyeY = pose.keypoints[1].position.y
+          const rightEyeY = pose.keypoints[2].position.y
+          const leftEyeX = pose.keypoints[1].position.x
+          const rightEyeX = pose.keypoints[2].position.x
+          const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
+          const diffEyeX = rightEyeX - leftEyeX
+          const diffEyeY = rightEyeY - leftEyeY
+          const headAngle = Math.atan(diffEyeY/diffEyeX) * 180/Math.PI
+          //console.log(headAngle)
+          const diff = curEyeY-defaultY
+          if(headAngle < -12){
 
-
-            if( 
-
-              leftEyeVX < -.30  && 
-              leftEyeAX < 0 &&
-              //leftEyeY > defaultY && 
-              leftEyeVY > 0 &&
-              rightEyeVY < 0/*&& 
-              leftEyeAY > 0 && 
-               &&
-              rightEyeAY > 0 */
-            ){
-              console.log("backkkk")
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(function() {
+              //console.log("tilted left")
               chrome.tabs.query({"active":true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {gesture : "back"});
               });
-            }else if(
-              rightEyeVX > .30  && 
-              rightEyeAX > 0 &&
-              //rightEyeY > defaultY && 
-              rightEyeVY > 0 &&
-              leftEyeVY < 0 /*&& 
-              rightEyeAY > 0 && 
-              leftEyeVY < 0 &&
-              leftEyeAY > 0 */
-            ){
-              console.log("forward")
+              timeoutId = 0;
+            }, 500);
+            
+          }
+          if(headAngle > 12){
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(function() {
+              //console.log("tilted right", window.innerHeight)
               chrome.tabs.query({"active":true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {gesture : "forward"});
               });
-            }
+              timeoutId = 0;
+            }, 500);
           }
 
+          if(diff > .3*eyeYRange || diff < -.25*eyeYRange  && !headGesture){
+            chrome.tabs.query({"active":true}, function(tabs) {
+              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff), 3/2) });
+            });
+          }          
         }
-        if(diff > 3 || diff < -2  && !headGesture){
-          chrome.tabs.query({"active":true}, function(tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff), 3/2) });
-          });
-        }          
-   
+        
      });
-    }
     ++numLoops
   }
-  
   setTimeout(loop, 25);
 }
 
