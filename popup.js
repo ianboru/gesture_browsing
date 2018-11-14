@@ -2,6 +2,21 @@
 console.log("starting popup")
 let numSpace = 0
 let calibrating = false
+let modelLoaded = false
+chrome.storage.local.get('modelLoaded', function(result){
+  if(result){
+    console.log("model from storage")
+    document.getElementById('calibrate').hidden = false
+    //document.getElementById('calibrate-text').innerHTML = ""
+  }
+});
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if ('modelLoaded' in changes) {
+    console.log("popup notice load")
+    document.getElementById('calibrate').hidden = false
+    document.getElementById('calibrate-text').innerHTML = ""
+  }
+});
 function setupCam() {
   navigator.mediaDevices.getUserMedia({
     video: true
@@ -11,25 +26,29 @@ function setupCam() {
     console.warn(error);
   });
 }
-function getSecondDiff(t1,t2){
-  var dif = t1.getTime() - t2.getTime();
-  var Seconds_from_T1_to_T2 = dif / 1000;
-  return Math.abs(Seconds_from_T1_to_T2);
-}
 function spacePressed(){
   console.log("space pressed ", numSpace)
   if(numSpace == 1 && calibrating){
-    document.getElementById('calibrate-text').innerHTML = "look at the bottom of this tab's window and press space"
-    chrome.runtime.sendMessage({calibrateTop: true});
+    document.getElementById('calibrate-text').innerHTML = "look at top of browser window press SPACE"
     console.log(document.getElementById('calibrate-text').innerHTML)
+    chrome.runtime.sendMessage({calibrateMiddle: true});
   }
   if(numSpace == 2  && calibrating){
+    chrome.runtime.sendMessage({calibrateTop: true});
+    document.getElementById('calibrate-text').innerHTML = "look at bottom of browser window press SPACE"
+  }
+  if(numSpace == 3  && calibrating){
     chrome.runtime.sendMessage({calibrateBottom: true});
     numSpace = 0
     calibrating = false
-    document.getElementById('calibrate-text').innerHTML = "recalibrate if necessary"
+    document.getElementById('calibrate').hidden = false
+    document.getElementById('calibrate-text').innerHTML = ""
+    window.close()
   }
-
+  setTimeout(function() {
+    console.log("can lift again")
+    leftWristTimeout = null;
+  }, 2000);
 }
 document.body.onkeyup = function(e){
   console.log(e)
@@ -41,14 +60,9 @@ document.body.onkeyup = function(e){
 }
 function calibrateClicked(){
   calibrating = true
-  document.getElementById('calibrate-text').innerHTML = "look the top of this tab's window and press space"
-
-  console.log("calibrating")//port.postMessage("calibrate-top");
-  let startTime = new Date()
-  let curTime = new Date()
-  let numloops = 0
-  let numSeconds = 0
-  
+  document.getElementById('calibrate-text').innerHTML = "look the middle of browser window and press SPACE"
+  document.getElementById('calibrate').hidden = true
+  console.log("calibrating")
 }
 setupCam();
 

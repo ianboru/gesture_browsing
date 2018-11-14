@@ -3,7 +3,8 @@
     <title>Eye Scroller</title>
     <style>
       body {
-        width: 250px;
+        width: 500px;
+        height: 150px;
         text-align: center;
         background-color : white;
       }
@@ -14,6 +15,11 @@
         background-color : blue;
         margin-bottom: 15px;
         border-radius : 4px;
+        margin-top : 60px;
+
+      }
+      #button-div{
+        vertical-align : middle;
       }
       .calibrate-text{
         font-size : 20pt;
@@ -31,16 +37,17 @@
       video{
         margin-top : 15px;
       }
-
   </style>
   </head>
   <body>
     <div>
-      <video autoplay="true" hidden=true id="webcamVideo" width="200" height="200"></video>
+      <video autoplay="true" id="webcamVideo" width="180" height="180"></video>
     </div>
-    <div id="calibrate-text" class="calibrate-text bold"></div>
-    <button id="calibrate">Calibrate</button>
-    <div class="text">Please re-calibrate if you change screen angle or position</div> 
+    <div id="calibrate-text" class="calibrate-text bold">Center yourself in the camera and calibrate</div>
+    <div id="button-div">
+      <button hidden=true id="calibrate">Calibrate</button>
+    </div>
+    
     <script src="popup.js"></script>
   </body>
 </html>
