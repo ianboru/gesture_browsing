@@ -100,7 +100,7 @@ function checkHandLift(pose){
     gesturesOn = !gesturesOn
     handLiftTimeout = true;
     console.log("lifted wrist left", 'on' ? gesturesOn : 'off')
-    chrome.tabs.query({"active":true}, function(tabs) {
+    chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
       chrome.tabs.sendMessage(tabs[0].id, {toggleGestures : gesturesOn ? 'on' : 'off'});
     });
     setTimeout(function() {
@@ -170,7 +170,7 @@ async function loop() {
           console.log("back", pose.keypoints[9].position.y, pose.keypoints[1].score )
           setTimeout(function() {
             timeoutId = null;
-            chrome.tabs.query({"active":true}, function(tabs) {
+            chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
               chrome.tabs.sendMessage(tabs[0].id, {gesture : "back"});
             });
             gesturesOn = !gesturesOn
@@ -181,7 +181,7 @@ async function loop() {
           timeoutId = true;
           console.log("forward",pose.keypoints[9].position.y, pose.keypoints[1].score )
           setTimeout(function() {
-            chrome.tabs.query({"active":true}, function(tabs) {
+            chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
               chrome.tabs.sendMessage(tabs[0].id, {gesture : "forward"});
             });
             headGesture = true
@@ -204,7 +204,8 @@ async function loop() {
         checkHandLift(pose)
 
         if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*eyeYRange*bufferZoneSize/2 || diff <  -1*.8*eyeYRange*bufferZoneSize/2) && gesturesOn){
-          chrome.tabs.query({"active":true}, function(tabs) {
+          chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
+            console.log(tabs)
             chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- eyeYRange*bufferZoneSize/2, 3/2) });
           });
         }          
