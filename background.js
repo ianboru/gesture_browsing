@@ -1,3 +1,4 @@
+const refreshRate = 125
 chrome.storage.local.clear()
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('camAccess' in changes) {
@@ -98,7 +99,10 @@ function checkHandLift(pose){
   ){
     gesturesOn = !gesturesOn
     handLiftTimeout = true;
-    console.log("lifted wrist left")
+    console.log("lifted wrist left", 'on' ? gesturesOn : 'off')
+    chrome.tabs.query({"active":true}, function(tabs) {
+      chrome.tabs.sendMessage(tabs[0].id, {toggleGestures : gesturesOn ? 'on' : 'off'});
+    });
     setTimeout(function() {
       console.log("can lift again")
       handLiftTimeout = false;
@@ -155,7 +159,6 @@ async function loop() {
         pose.keypoints[2].score > scoreThreshold && 
         gesturesOn 
       ){
-        console.log(gesturesOn)
         curHeadAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
         curHeadAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
         const headAngle = mean([curHeadAngleEyes, curHeadAngleEars])
@@ -210,6 +213,6 @@ async function loop() {
     });
     ++numLoops
   }
-  setTimeout(loop, 25);
+  setTimeout(loop, refreshRate);
 }
 
