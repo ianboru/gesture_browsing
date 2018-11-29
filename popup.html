@@ -3,31 +3,32 @@
     <title>Eye Scroller</title>
     <style>
       body {
-        width: 500px;
+        width: 400px;
         height: 150px;
         text-align: center;
         background-color : white;
       }
       #calibrate{
         color : white;
-        font-size : 20pt;
+        font-size : 15pt;
         font-weight : bold;
         background-color : blue;
         margin-bottom: 15px;
+        margin-top : 20px;
         border-radius : 4px;
-        margin-top : 60px;
-
       }
       #button-div{
         vertical-align : middle;
       }
       .calibrate-text{
-        font-size : 20pt;
+        font-size : 12pt;
+        margin : 0 auto;
         margin-bottom: 15px;
+        margin-top : 15px;
         color : black;
       }
       .text{
-        font-size : 15pt;
+        font-size : 12pt;
         margin-bottom: 15px;
         color : black;
       }
@@ -35,19 +36,30 @@
         font-weight : bold;
       }
       video{
-        margin-top : 15px;
+        transform: rotateY(180deg);
+        -webkit-transform:rotateY(180deg); /* Safari and Chrome */
+        -moz-transform:rotateY(180deg);
+      }
+      #gestures{
+        margin-top: 15px;
+        font-size : 12pt;
       }
   </style>
   </head>
   <body>
+    <div id="calibrate-text" class="calibrate-text bold">Center yourself in the camera and click calibrate</div>
+    <img id="calibrate-middle" hidden=true src="calibrate_middle.png" width="250">
+    <img id="calibrate-top" hidden=true src="calibrate_top.png" width="250">
+    <img id="calibrate-bottom" hidden=true src="calibrate_bottom.png" width="250">
+
     <div>
-      <video autoplay="true" id="webcamVideo" width="180" height="180"></video>
+      <video autoplay="true" id="webcamVideo" width="250"></video>
     </div>
-    <div id="calibrate-text" class="calibrate-text bold">Center yourself in the camera and calibrate</div>
-    <div id="button-div">
-      <button hidden=true id="calibrate">Calibrate</button>
-    </div>
-    
+    <button id="calibrate">Loading Tracker</button>
+
+    <h3 id="gestures" hidden=true>Gestures</h3>
+    <img id="examples" hidden=true src="examples.png" width="300">
+
     <script src="popup.js"></script>
   </body>
 </html>

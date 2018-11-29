@@ -1,3 +1,4 @@
+chrome.storage.local.clear()
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('camAccess' in changes) {
     console.log('cam access granted');
@@ -23,6 +24,33 @@ chrome.runtime.onInstalled.addListener((details) => {
   });
 });
 
+chrome.runtime.onMessage.addListener((request) => {
+    if(request.calibrateTop){
+      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+           topEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+       })
+    }
+    if(request.calibrateMiddle){
+      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+           middleEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+           headAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
+           headAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
+           restingHeadAngle = mean([headAngleEyes, headAngleEars])
+           middleEyeDistance = Math.abs(pose.keypoints[1].position.x - pose.keypoints[2].position.x)
+           console.log("resting head angle" , restingHeadAngle)
+       })
+    }
+    if(request.calibrateBottom){
+      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+           bottomEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+           console.log("eye y", topEyeY, middleEyeY, bottomEyeY)
+           middleY = mean([topEyeY, bottomEyeY])
+           eyeYRange = Math.abs(topEyeY - bottomEyeY)
+           
+       })
+    }
+})
+setupCam();
 async function setupCam() {
   navigator.mediaDevices.getUserMedia({
     video: true
@@ -51,9 +79,6 @@ function calculateHeadAngle(leftKeypoint, rightKeyPoint){
 
   return headAngle
 }
-function calculationZTilt(keypoints){
-
-}
 function mean(array){
   let total = 0 
   array.forEach((element,index)=>{
@@ -64,8 +89,28 @@ function mean(array){
 function calculatDiff(array,offset){
   return array[array.length-1] - array[array.length + offset-1]
 }
+function checkHandLift(pose){
+  if(
+    mean([pose.keypoints[9].score, pose.keypoints[10].score]) > wristScoreThreshold &&
+    (pose.keypoints[9].position.y < handLiftThreshold || 
+    pose.keypoints[10].position.y < handLiftThreshold) &&
+    !handLiftTimeout
+  ){
+    gesturesOn = !gesturesOn
+    handLiftTimeout = true;
+    console.log("lifted wrist left")
+    setTimeout(function() {
+      console.log("can lift again")
+      handLiftTimeout = false;
+    }, 2500);
+  }
+}
 
-
+function calculateDistance(position1, position2){
+  const dxSquared = Math.pow(position1.x - position2.x,2)
+  const dySquared = Math.pow(position1.y - position2.y,2)
+  return Math.pow(dxSquared + dySquared, .5)
+}
 const vid = document.querySelector('#webcamVideo');
 
 //posenet
@@ -82,89 +127,43 @@ let eyeYRange
 let restingHeadAngle
 
 //triggers
-var tiltAngle = 10
+var tiltAngle = 16
 var scoreThreshold = .93
-var earScoreThreshold = .65
+var earScoreThreshold = .45
 const wristScoreThreshold = .4
-var bufferZoneSize = .6
+var bufferZoneSize = .9
 
 //initialize
 let middleY = null
+
 let calibrationStatus = null
 let numLoops = 0
 var timeoutId = false
 let handLiftTimeout = false
-const handLiftThreshold = 140
+const handLiftThreshold = 120
 let gesturesOn = true
-function checkHandLift(pose){
-  if(
-        mean([pose.keypoints[9].score, pose.keypoints[10].score]) > wristScoreThreshold &&
-        (pose.keypoints[9].position.y < handLiftThreshold || 
-        pose.keypoints[10].position.y < handLiftThreshold) &&
-        !handLiftTimeout
-      ){
-
-        gesturesOn = !gesturesOn
-        handLiftTimeout = true;
-        console.log("lifted wrist left")
-        console.log(pose.keypoints)
-        setTimeout(function() {
-          console.log("can lift again")
-          handLiftTimeout = null;
-        }, 2000);
-      }
-}
-chrome.runtime.onMessage.addListener((request) => {
-    if(request.calibrateTop){
-      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           topEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-           
-       })
-    }
-    if(request.calibrateMiddle){
-      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           middleEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-           headAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
-           headAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
-           restingHeadAngle = mean([headAngleEyes, headAngleEars])
-           console.log("resting head angle" , restingHeadAngle)
-       })
-    }
-    if(request.calibrateBottom){
-      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           bottomEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-           console.log("eye y", topEyeY, middleEyeY, bottomEyeY)
-           middleY = mean([topEyeY, middleEyeY, bottomEyeY])// - .1 * eyeYRange
-           eyeYRange = Math.abs(topEyeY - bottomEyeY)
-           
-       })
-    }
-})
+let middleEyeDistance
 async function loop() {
   
   if(net && middleY){
-    let headGesture = false
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-      
+      const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
       if(
+        Math.abs(curEyeDistance- middleEyeDistance)/middleEyeDistance < .3 &&
         pose.keypoints[1].score > scoreThreshold &&
         pose.keypoints[2].score > scoreThreshold && 
-        pose.keypoints[3].score > earScoreThreshold && 
-        pose.keypoints[4].score > earScoreThreshold && 
-        gesturesOn && !handLiftTimeout){
+        gesturesOn 
+      ){
+        console.log(gesturesOn)
         curHeadAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
         curHeadAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
         const headAngle = mean([curHeadAngleEyes, curHeadAngleEars])
-        const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
-        const diff = curEyeY-middleY
         //console.log("angles " ,headAngle, restingHeadAngle, headAngle- restingHeadAngle)
-        
-        checkHandLift(pose)
+
         if(!timeoutId && headAngle - restingHeadAngle < -1*tiltAngle ){
           gesturesOn = !gesturesOn
           timeoutId = true;
-          headGesture = true
           console.log("back", pose.keypoints[9].position.y, pose.keypoints[1].score )
           setTimeout(function() {
             timeoutId = null;
@@ -188,15 +187,26 @@ async function loop() {
           }, 1000);
           
         }
+      }
 
-        if(diff >  eyeYRange*bufferZoneSize/2 || diff <  -1*.8*eyeYRange*bufferZoneSize/2 && !headGesture){
-          //console.log(eyeYRange, diff)
+      if(
+          pose.keypoints[1].score > scoreThreshold &&
+          pose.keypoints[2].score > scoreThreshold && 
+          pose.keypoints[3].score > earScoreThreshold && 
+          pose.keypoints[4].score > earScoreThreshold 
+        ){
+        
+        const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
+        const diff = curEyeY-middleY
+        checkHandLift(pose)
+
+        if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*eyeYRange*bufferZoneSize/2 || diff <  -1*.8*eyeYRange*bufferZoneSize/2) && gesturesOn){
           chrome.tabs.query({"active":true}, function(tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff), 3/2) });
+            chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- eyeYRange*bufferZoneSize/2, 3/2) });
           });
         }          
       }
-        
+          
     });
     ++numLoops
   }
