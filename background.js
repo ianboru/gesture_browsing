@@ -147,11 +147,15 @@ let handLiftTimeout = false
 const handLiftThreshold = 120
 let gesturesOn = true
 let middleEyeDistance
+let lastFocusedTab = null
 async function loop() {
   
   if(net && middleY){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+      chrome.runtime.sendMessage({
+        eyes: [pose.keypoints[1].position, pose.keypoints[2].position]
+      });
       const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
       if(
         Math.abs(curEyeDistance- middleEyeDistance)/middleEyeDistance < .3 &&
@@ -205,8 +209,9 @@ async function loop() {
 
         if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*eyeYRange*bufferZoneSize/2 || diff <  -1*.8*eyeYRange*bufferZoneSize/2) && gesturesOn){
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
-            console.log(tabs)
-            chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- eyeYRange*bufferZoneSize/2, 3/2) });
+            if(tabs.length > 0){
+              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- eyeYRange*bufferZoneSize/2, 3/2) });
+            }  
           });
         }          
       }

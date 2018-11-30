@@ -1,8 +1,33 @@
 
 console.log("starting popup")
+const vid = document.querySelector('#webcamVideo');
 let numSpace = 0
 let calibrating = false
 let modelLoaded = false
+//posenet
+var imageScaleFactor = 0.5;
+var outputStride = 16;
+var flipHorizontal = true;
+let net = null 
+this.c1 = document.getElementById('c1');
+this.video = document.getElementById('video');
+const boxSize = 10
+
+function computeFrame(positions){
+  console.log("left eye" , positions[0])
+  console.log("right eye" , positions[1])
+  this.ctx1 = this.c1.getContext('2d');
+  this.ctx1.drawImage(vid, 0, 0, this.width, this.height);
+  this.ctx1.strokeRect(positions[0].x - boxSize/2 , positions[0].y - boxSize/2, boxSize, boxSize);
+  this.ctx1.strokeRect(positions[1].x - boxSize/2 , positions[1].y - boxSize/2, boxSize, boxSize);
+}
+chrome.runtime.onMessage.addListener((request,sender,sendResponse) => {
+  console.log("seeing bg changes", request)
+  if(request.eyes){
+    computeFrame(request.eyes)
+  }
+
+})
 chrome.storage.local.get('modelLoaded', function(result){
   if(result.modelLoaded){
     console.log("model from storage")
@@ -10,6 +35,7 @@ chrome.storage.local.get('modelLoaded', function(result){
   }
 });
 chrome.storage.onChanged.addListener((changes, namespace) => {
+  console.log("changes ", changes)
   console.log("loaded changes",changes)
   if ('modelLoaded' in changes) {
     console.log("popup notice load")
@@ -42,12 +68,11 @@ function setCalibratedState(){
   document.getElementById('calibrate-middle').hidden = true 
   document.getElementById('calibrate-top').hidden = true 
   document.getElementById('calibrate-bottom').hidden = true 
-  document.getElementById('webcamVideo').hidden = true
+  //document.getElementById('webcamVideo').hidden = true
 
 }
 function calibrateClicked(){
   calibrating = true
-  document.getElementById('webcamVideo').hidden = true
   document.getElementById('calibrate-text').innerHTML = "look at the MIDDLE of the BROWSER</br></br>press SPACE"
   document.getElementById('calibrate').hidden = true
   document.getElementById('calibrate-middle').hidden = false 
@@ -55,6 +80,7 @@ function calibrateClicked(){
   document.getElementById('calibrate-bottom').hidden = true 
   document.getElementById('examples').hidden = true 
   document.getElementById('gestures').hidden = true
+  //document.getElementById('webcamVideo').hidden = true
 
 
   console.log("calibrating")
