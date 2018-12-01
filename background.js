@@ -1,4 +1,3 @@
-const refreshRate = 125
 chrome.storage.local.clear()
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('camAccess' in changes) {
@@ -47,7 +46,9 @@ chrome.runtime.onMessage.addListener((request) => {
            console.log("eye y", topEyeY, middleEyeY, bottomEyeY)
            middleY = mean([topEyeY, bottomEyeY])
            eyeYRange = Math.abs(topEyeY - bottomEyeY)
-           
+           chrome.runtime.sendMessage({
+             init: { top: topEyeY, bottom : bottomEyeY, range : eyeYRange, buffer : bufferZoneSize}
+           });
        })
     }
 })
@@ -101,7 +102,9 @@ function checkHandLift(pose){
     handLiftTimeout = true;
     console.log("lifted wrist left", 'on' ? gesturesOn : 'off')
     chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, {toggleGestures : gesturesOn ? 'on' : 'off'});
+      if(tabs.length > 0){
+        chrome.tabs.sendMessage(tabs[0].id, {toggleGestures : gesturesOn ? 'on' : 'off'});
+      }
     });
     setTimeout(function() {
       console.log("can lift again")
@@ -120,7 +123,7 @@ const vid = document.querySelector('#webcamVideo');
 //posenet
 var imageScaleFactor = 0.5;
 var outputStride = 16;
-var flipHorizontal = true;
+var flipHorizontal = false;
 let net = null 
 
 //tracking
@@ -148,13 +151,15 @@ const handLiftThreshold = 120
 let gesturesOn = true
 let middleEyeDistance
 let lastFocusedTab = null
+const refreshRate = 100
+
 async function loop() {
   
   if(net && middleY){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
       chrome.runtime.sendMessage({
-        eyes: [pose.keypoints[1].position, pose.keypoints[2].position]
+        eyes: [pose.keypoints[1].position, pose.keypoints[2].position],
       });
       const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
       if(

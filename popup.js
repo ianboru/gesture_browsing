@@ -1,6 +1,6 @@
 
 console.log("starting popup")
-const vid = document.querySelector('#webcamVideo');
+const video = document.getElementById('webcamVideo');
 let numSpace = 0
 let calibrating = false
 let modelLoaded = false
@@ -9,24 +9,38 @@ var imageScaleFactor = 0.5;
 var outputStride = 16;
 var flipHorizontal = true;
 let net = null 
-this.c1 = document.getElementById('c1');
-this.video = document.getElementById('video');
+const c1 = document.getElementById('c1');
 const boxSize = 10
-
+let streaming = false
+let buffer 
+let range 
+let videoWidth 
+let videoHeight
+let topY
+let bottom 
 function computeFrame(positions){
-  console.log("left eye" , positions[0])
-  console.log("right eye" , positions[1])
-  this.ctx1 = this.c1.getContext('2d');
-  this.ctx1.drawImage(vid, 0, 0, this.width, this.height);
-  this.ctx1.strokeRect(positions[0].x - boxSize/2 , positions[0].y - boxSize/2, boxSize, boxSize);
-  this.ctx1.strokeRect(positions[1].x - boxSize/2 , positions[1].y - boxSize/2, boxSize, boxSize);
-}
-chrome.runtime.onMessage.addListener((request,sender,sendResponse) => {
-  console.log("seeing bg changes", request)
-  if(request.eyes){
-    computeFrame(request.eyes)
-  }
+  let ctx1 = c1.getContext('2d');
+  //ctx1.clearRect(0, 0, videoWidth, videoHeight)
+  ctx1.drawImage(video, 0, 0, 640, 480);
+  ctx1.strokeStyle="#FF0000";
+  console.log(positions)
+  ctx1.strokeRect(positions[0].x - boxSize/2 , positions[0].y - boxSize/2 , boxSize, boxSize);
+  ctx1.strokeRect(positions[1].x - boxSize/2 , positions[1].y - boxSize/2 , boxSize, boxSize);
+  ctx1.fillRect(0,  topY-16, 640, 10);
 
+}
+
+chrome.runtime.onMessage.addListener((request,sender,sendResponse) => {
+  if(request.eyes){
+    computeFrame(request.eyes, request.range, request.buffer)
+  }
+  if(request.init){
+    console.log("set init values", request)
+    range = request.init.range
+    buffer = request.init.buffer
+    topY = request.init.top
+    bottom = request.init.bottom
+  }
 })
 chrome.storage.local.get('modelLoaded', function(result){
   if(result.modelLoaded){
@@ -50,13 +64,27 @@ chrome.storage.local.get('calibrated', function(result){
   }
 });
 function setupCam() {
-  navigator.mediaDevices.getUserMedia({
-    video: true
-  }).then(mediaStream => {
-    document.querySelector('#webcamVideo').srcObject = mediaStream;
-  }).catch((error) => {
-    console.warn(error);
+  let that = this
+  if (streaming) return;
+  navigator.mediaDevices.getUserMedia({video: true, audio: false})
+    .then(function(s) {
+      stream = s
+      video.srcObject = s;
+      video.play();
+      console.log("stream set ")
+    })
+  .catch(function(err) {
+    console.log("An error occured! " + err);
   });
+
+  video.addEventListener("canplay", function(ev){
+    if (!streaming) {
+      streaming = true
+      console.log("all set")
+      videoHeight = video.videoHeight
+      videoWidth = video.videoWidth
+    }
+  }, false);
 }
 
 function setCalibratedState(){

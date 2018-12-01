@@ -3,7 +3,7 @@
     <title>Eye Scroller</title>
     <style>
       body {
-        width: 400px;
+        width: 640px;
         height: 150px;
         text-align: center;
         background-color : white;
@@ -35,10 +35,15 @@
       .bold{
         font-weight : bold;
       }
-      video{
+      video,#c1{
         transform: rotateY(180deg);
         -webkit-transform:rotateY(180deg); /* Safari and Chrome */
         -moz-transform:rotateY(180deg);
+        padding:0;
+      }
+      #c1{
+        width:640px;
+        height:480px;
       }
       #gestures{
         margin-top: 15px;
@@ -53,8 +58,8 @@
     <img id="calibrate-bottom" hidden=true src="calibrate_bottom.png" width="250">
 
     <div>
-      <video autoplay="true" id="webcamVideo" width="250"></video>
-       <canvas id="c1" width="250"></canvas>
+      <video autoplay="true" id="webcamVideo" height="480" width="640"></video>
+       <canvas id="c1" height="480" width="640"></canvas>
     </div>
     <button id="calibrate">Loading Tracker</button>
 
