@@ -1,0 +1,16 @@
+Version 0.4
+- make "recalibrate" secondary on the post calibration screen
+- remove back/forward or enhance forward detection, maybe make more leniant
+- solidify on/off gesture
+- make gestures on/off a popup from the icon
+- improve off screen detection
+- ask user to look only at readable zone
+- fix refresh behavior
+
+Version 1.0
+- add visualization for different zones
+- ask user to look off screen and further improve off screen detection
+- improve memory utilization
+- fix sleep behavior
+
+
