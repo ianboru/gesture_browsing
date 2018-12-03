@@ -1,10 +1,16 @@
 chrome.storage.local.clear()
 chrome.tabs.onActivated.addListener(function(activeInfo) {
   console.log("reloaded ", activeInfo)
-    chrome.tabs.reload()
-
+  chrome.storage.local.get([activeInfo['windowId'] + "-" + activeInfo['tabId']], items => {
+    console.log(items)
+    if(!items[activeInfo['windowId'] + "-" + activeInfo['tabId']]){
+      chrome.tabs.reload()
+      chrome.storage.local.set({ [activeInfo['windowId'] + "-" + activeInfo['tabId']]: true });
+    }
+    
+  })
 });
-
+    
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('camAccess' in changes) {
     console.log('cam access granted');
