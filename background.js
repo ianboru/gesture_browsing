@@ -1,10 +1,8 @@
 chrome.storage.local.clear()
 chrome.tabs.onActivated.addListener(function(activeInfo) {
-  console.log("reloaded ", activeInfo)
   chrome.storage.local.get([activeInfo['windowId'] + "-" + activeInfo['tabId']], items => {
-    console.log(items)
     if(!items[activeInfo['windowId'] + "-" + activeInfo['tabId']]){
-      chrome.tabs.reload()
+      //chrome.tabs.reload()
       chrome.storage.local.set({ [activeInfo['windowId'] + "-" + activeInfo['tabId']]: true });
     }
     
@@ -100,16 +98,19 @@ function mean(array){
 function calculatDiff(array,offset){
   return array[array.length-1] - array[array.length + offset-1]
 }
-function checkHandLift(pose){
+function checkHandLift(pose,eyeHeight, earsX){
+  const leftHand = pose.keypoints[9]
+  const rightHand = pose.keypoints[10]
   if(
-    mean([pose.keypoints[9].score, pose.keypoints[10].score]) > wristScoreThreshold &&
-    (pose.keypoints[9].position.y < handLiftThreshold || 
-    pose.keypoints[10].position.y < handLiftThreshold) &&
+    mean([leftHand.score, rightHand.score]) > wristScoreThreshold &&
+    Math.max(leftHand.position.y,rightHand.position.y) < eyeHeight - eyeHeight*.03 &&
+    Math.max(leftHand.position.y,rightHand.position.y) < Math.max(earsX[0],earsX[1]) + Math.max(earsX[0],earsX[1]) * .03  &&
+    Math.min(leftHand.position.y,rightHand.position.y) < Math.min(earsX[0],earsX[1]) + Math.min(earsX[0],earsX[1]) * .03 &&
     !handLiftTimeout
   ){
     gesturesOn = !gesturesOn
     handLiftTimeout = true;
-    console.log("lifted wrist left", 'on' ? gesturesOn : 'off')
+    console.log("Turn gestures on ", 'on' ? gesturesOn : 'off')
     chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
       if(tabs.length > 0){
         chrome.tabs.sendMessage(tabs[0].id, {toggleGestures : gesturesOn ? 'on' : 'off'});
@@ -118,7 +119,7 @@ function checkHandLift(pose){
     setTimeout(function() {
       console.log("can lift again")
       handLiftTimeout = false;
-    }, 2500);
+    }, 2000);
   }
 }
 
@@ -207,6 +208,8 @@ async function loop() {
           
         }
       }
+      const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
+      checkHandLift(pose, curEyeY, [pose.keypoints[3].position.x, pose.keypoints[4].position.x])
 
       if(
           pose.keypoints[1].score > scoreThreshold &&
@@ -215,11 +218,10 @@ async function loop() {
           pose.keypoints[4].score > earScoreThreshold 
         ){
         
-        const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
         const diff = curEyeY-middleY
-        checkHandLift(pose)
         const bufferRange = eyeYRange*bufferZoneSize/2
-        if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*bufferRange || diff <  -1*.7*bufferRange) && gesturesOn){
+        //Math.abs(diff) < Math.max(6*eyeYRange, 15) && 
+        if((diff >  1*bufferRange || diff <  -1*.7*bufferRange) && gesturesOn){
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
             if(tabs.length > 0){
               chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- bufferRange, 2)/3 });
