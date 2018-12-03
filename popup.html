@@ -17,6 +17,9 @@
         margin-top : 20px;
         border-radius : 4px;
       }
+      #calibrate:hover:enabled {
+          background-color: black
+      }
       #button-div{
         vertical-align : middle;
       }
@@ -60,7 +63,7 @@
     <div>
       <video autoplay="true" id="webcamVideo" height="250" width="250"></video>
     </div>
-    <button id="calibrate">Loading Tracker</button>
+    <button id="calibrate" disabled=true >Loading Tracker</button>
 
     <h3 id="gestures" hidden=true>Gestures</h3>
     <img id="examples" hidden=true src="examples.png" width="300">

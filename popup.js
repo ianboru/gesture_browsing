@@ -36,6 +36,9 @@ chrome.runtime.onMessage.addListener((request,sender,sendResponse) => {
 chrome.storage.local.get('modelLoaded', function(result){
   if(result.modelLoaded){
     console.log("model from storage")
+    modelLoaded = true
+    document.getElementById('calibrate').disabled = false
+
     document.getElementById('calibrate').innerHTML = "Calibrate"
   }
 });
@@ -45,6 +48,8 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   if ('modelLoaded' in changes) {
     console.log("popup notice load")
     document.getElementById('calibrate').innerHTML = "Calibrate"
+    document.getElementById('calibrate').disabled = false
+
   }
 });
 chrome.storage.local.get('calibrated', function(result){
@@ -91,6 +96,7 @@ function setCalibratedState(){
 
 }
 function calibrateClicked(){
+
   calibrating = true
   document.getElementById('calibrate-text').innerHTML = "look at the MIDDLE of the BROWSER</br></br>press SPACE"
   document.getElementById('calibrate').hidden = true
@@ -107,7 +113,7 @@ function calibrateClicked(){
 function spacePressed(){
   console.log("space pressed ", numSpace)
   if(numSpace == 1 && calibrating){
-    document.getElementById('calibrate-text').innerHTML = "Tilt your head to look at the TOP of the BROWSER</br></br>press SPACE"
+    document.getElementById('calibrate-text').innerHTML = "Tilt your head to the TOP of where you would read comfortably</br></br>press SPACE"
     console.log(document.getElementById('calibrate-text').innerHTML)
     document.getElementById('calibrate-middle').hidden = true 
     document.getElementById('calibrate-top').hidden = false 
@@ -116,7 +122,7 @@ function spacePressed(){
   }
   if(numSpace == 2  && calibrating){
     chrome.runtime.sendMessage({calibrateTop: true});
-    document.getElementById('calibrate-text').innerHTML = "Tilt your head to look at the BOTTOM of the BROWSER</br></br>press SPACE"
+    document.getElementById('calibrate-text').innerHTML = "Tilt your head to the BOTTOM of where you would read comfortably</br></br>press SPACE"
     document.getElementById('calibrate-middle').hidden = true 
     document.getElementById('calibrate-top').hidden = true 
     document.getElementById('calibrate-bottom').hidden = false 
