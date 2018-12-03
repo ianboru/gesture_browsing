@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Cam Scroller",
-  "description": "This extension lets a user scroll webpages using webcam gestures.",
-  "version": "0.1",
+  "name": "Gesture Browser",
+  "description": "This extension lets a user navigate webpages using eye and head motions.",
+  "version": "0.3",
   "browser_action": {
    "default_icon": "icon.png",
    "default_popup": "popup.html"
@@ -12,17 +12,16 @@
       "matches": [
         "<all_urls>"
       ],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "background": {
     "page": "background.html"
   },
   "permissions": [
-    "input",
     "activeTab",
-    "storage",
-    "unlimitedStorage",
-    "tabs"  
+    "storage"
    ]
 }

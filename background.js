@@ -46,9 +46,6 @@ chrome.runtime.onMessage.addListener((request) => {
            console.log("eye y", topEyeY, middleEyeY, bottomEyeY)
            middleY = mean([topEyeY, bottomEyeY])
            eyeYRange = Math.abs(topEyeY - bottomEyeY)
-           chrome.runtime.sendMessage({
-             init: { top: topEyeY, bottom : bottomEyeY, range : eyeYRange, buffer : bufferZoneSize}
-           });
        })
     }
 })
@@ -138,7 +135,7 @@ var tiltAngle = 16
 var scoreThreshold = .93
 var earScoreThreshold = .45
 const wristScoreThreshold = .4
-var bufferZoneSize = .9
+var bufferZoneSize = .95
 
 //initialize
 let middleY = null
@@ -158,9 +155,7 @@ async function loop() {
   if(net && middleY){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-      chrome.runtime.sendMessage({
-        eyes: [pose.keypoints[1].position, pose.keypoints[2].position],
-      });
+      
       const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
       if(
         Math.abs(curEyeDistance- middleEyeDistance)/middleEyeDistance < .3 &&
@@ -211,11 +206,11 @@ async function loop() {
         const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
         const diff = curEyeY-middleY
         checkHandLift(pose)
-
-        if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*eyeYRange*bufferZoneSize/2 || diff <  -1*.8*eyeYRange*bufferZoneSize/2) && gesturesOn){
+        const bufferRange = eyeYRange*bufferZoneSize/2
+        if(Math.abs(diff) < Math.max(6*eyeYRange, 15) && (diff >  1*bufferRange || diff <  -1*.7*bufferRange) && gesturesOn){
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
             if(tabs.length > 0){
-              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- eyeYRange*bufferZoneSize/2, 3/2) });
+              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- bufferRange, 2)/3 });
             }  
           });
         }          

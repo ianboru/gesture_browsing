@@ -31,16 +31,7 @@ function computeFrame(positions){
 }
 
 chrome.runtime.onMessage.addListener((request,sender,sendResponse) => {
-  if(request.eyes){
-    computeFrame(request.eyes, request.range, request.buffer)
-  }
-  if(request.init){
-    console.log("set init values", request)
-    range = request.init.range
-    buffer = request.init.buffer
-    topY = request.init.top
-    bottom = request.init.bottom
-  }
+
 })
 chrome.storage.local.get('modelLoaded', function(result){
   if(result.modelLoaded){
