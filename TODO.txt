@@ -1,12 +1,9 @@
 Version 0.4
 - make "recalibrate" secondary on the post calibration screen
 - remove back/forward or enhance forward detection, maybe make more leniant
-- solidify on/off gesture
-- make gestures on/off a popup from the icon
 - improve off screen detection
-- ask user to look only at readable zone
 - show more vs less sensitive calibration
-
+- disable calibration button while loading
 
 Version 1.0
 - add visualization for different zones
@@ -15,4 +12,4 @@ Version 1.0
 - fix sleep behavior
 - scroll in nested divs
 - prompt refresh will happen
-
+- add distance/height change detection
