@@ -3,7 +3,7 @@ navigator.mediaDevices.getUserMedia({
   }).then(stream => {
     document.querySelector('#title').hidden = true
     document.querySelector('#status').innerHTML =
-      'Webcam access granted for extension.<br/><br/>Try extension on a NEW or REFRESHED TAB.<br/><br/>Click extension icon to calibrate.';
+      'Webcam access granted for extension.<br/><br/>Click extension icon in top right of browser to calibrate.';
     chrome.storage.local.set({
       'camAccess': true
     }, () => {});
