@@ -148,12 +148,7 @@ var tiltAngle = 16
 var scoreThreshold = .93
 var earScoreThreshold = .45
 const wristScoreThreshold = .4
-var bufferZoneSize = .95
 
-//initialize
-let middleY = null
-
-let calibrationStatus = null
 let numLoops = 0
 var timeoutId = false
 let handLiftTimeout = false
@@ -165,7 +160,7 @@ const refreshRate = 100
 
 async function loop() {
   
-  if(net && middleY){
+  if(net && middleEyeY){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
       
@@ -217,14 +212,13 @@ async function loop() {
           pose.keypoints[3].score > earScoreThreshold && 
           pose.keypoints[4].score > earScoreThreshold 
         ){
-        
-        const diff = curEyeY-middleY
-        const bufferRange = eyeYRange*bufferZoneSize/2
+        const meanCalibrationY = mean([bottomEyeY, topEyeY])
+        const diff = curEyeY- meanCalibrationY
         //Math.abs(diff) < Math.max(6*eyeYRange, 15) && 
-        if((diff >  1*bufferRange || diff <  -1*.7*bufferRange) && gesturesOn){
+        if((diff > eyeYRange/2 || diff <  -1*.8*eyeYRange/2) && gesturesOn){
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
             if(tabs.length > 0){
-              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff)- bufferRange, 2)/3 });
+              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff) - Math.abs(topEyeY- meanCalibrationY), 2)/3 });
             }  
           });
         }          
