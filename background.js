@@ -147,6 +147,7 @@ let restingHeadAngle
 var tiltAngle = 16
 var scoreThreshold = .93
 var earScoreThreshold = .45
+const noseScoreThreshold = .95
 const wristScoreThreshold = .4
 
 let numLoops = 0
@@ -205,12 +206,12 @@ async function loop() {
       }
       const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
       checkHandLift(pose, curEyeY, [pose.keypoints[3].position.x, pose.keypoints[4].position.x])
-
       if(
           pose.keypoints[1].score > scoreThreshold &&
           pose.keypoints[2].score > scoreThreshold && 
           pose.keypoints[3].score > earScoreThreshold && 
-          pose.keypoints[4].score > earScoreThreshold 
+          pose.keypoints[4].score > earScoreThreshold &&
+          pose.keypoints[0].score > noseScoreThreshold
         ){
         const meanCalibrationY = mean([bottomEyeY, topEyeY])
         const diff = curEyeY- meanCalibrationY
