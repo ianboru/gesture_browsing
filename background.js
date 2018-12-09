@@ -1,4 +1,40 @@
 chrome.storage.local.clear()
+const vid = document.querySelector('#webcamVideo');
+
+//posenet
+var imageScaleFactor = 0.5;
+var outputStride = 16;
+var flipHorizontal = false;
+let net = null 
+
+//tracking
+let topEyeY
+let topEarY
+let topEyeEarY
+let topEyeDistance
+let bottomEyeY
+let meanCalibrationY
+let calibrationEyeYRange
+let restingHeadAngle
+let calibrated = false
+let referenceYRange
+let referenceY
+//triggers
+var tiltAngle = 16
+var scoreThreshold = .93
+var earScoreThreshold = .45
+const noseScoreThreshold = .95
+const wristScoreThreshold = .4
+
+let numLoops = 0
+var timeoutId = false
+let handLiftTimeout = false
+const handLiftThreshold = 120
+let gesturesOn = true
+let lastFocusedTab = null
+const refreshRate = 50
+const buffer = .60
+
 chrome.tabs.onActivated.addListener(function(activeInfo) {
   chrome.storage.local.get([activeInfo['windowId'] + "-" + activeInfo['tabId']], items => {
     if(!items[activeInfo['windowId'] + "-" + activeInfo['tabId']]){
@@ -38,22 +74,29 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onMessage.addListener((request) => {
     if(request.calibrateTop){
       net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           topEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-            middleEyeDistance = Math.abs(pose.keypoints[1].position.x - pose.keypoints[2].position.x)
-           headAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
-           headAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
+           topNoseY = vid.height - pose.keypoints[0].position.y
+           topEyeY = vid.height - mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+           topEyeNoseY = Math.abs(topNoseY- topEyeY)
+           topEarY = vid.height - mean([pose.keypoints[3].position.y,pose.keypoints[4].position.y])
+           topEyeXDistance = Math.abs(pose.keypoints[1].position.x - pose.keypoints[2].position.x)
+           topEyeEarY = Math.abs(topEyeY - topEarY)
+           topEyeDistance = calculateDistance(pose.keypoints[1].position,pose.keypoints[2].position)
+           topEarY = vid.height - mean([pose.keypoints[3].position.y,pose.keypoints[4].position.y])
+           headAngleEyes =  calculateLeftRightHeadAngle(pose.keypoints[1],pose.keypoints[2])
+           headAngleEars =  calculateLeftRightHeadAngle(pose.keypoints[3],pose.keypoints[4])
            restingHeadAngle = mean([headAngleEyes, headAngleEars])
-            console.log("resting head angle" , restingHeadAngle)
-
        })
     }
 
     if(request.calibrateBottom){
+
       net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
            bottomEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-           console.log("calibration heights", topEyeY, bottomEyeY)
-           middleY = mean([topEyeY, bottomEyeY])
-           eyeYRange = Math.abs(topEyeY - bottomEyeY)
+           calibrationEyeYRange = Math.abs(topEyeY - bottomEyeY)*buffer
+           meanCalibrationY = mean([bottomEyeY, topEyeY])
+           referenceY = meanCalibrationY
+           referenceYRange = calibrationEyeYRange
+           calibrated = true
        })
     }
 })
@@ -74,18 +117,18 @@ async function setupCam() {
   setTimeout(loop, 50);
 }
 
-function calculateHeadAngle(leftKeypoint, rightKeyPoint){
-  const leftEyeY = leftKeypoint.position.y
-  const rightEyeY = rightKeyPoint.position.y
-  const leftEyeX = leftKeypoint.position.x
-  const rightEyeX = rightKeyPoint.position.x
-  const curEyeY = (leftKeypoint.position.y +  rightKeyPoint.position.y)/2
-  const diffEyeX = rightEyeX - leftEyeX
-  const diffEyeY = rightEyeY - leftEyeY
-  const headAngle = Math.atan(diffEyeY/diffEyeX) * 180/Math.PI 
+function calculateLeftRightHeadAngle(leftKeypoint, rightKeyPoint){
+  const leftY = leftKeypoint.position.y
+  const rightY = rightKeyPoint.position.y
+  const leftX = leftKeypoint.position.x
+  const rightX = rightKeyPoint.position.x
+  const diffX = rightX - leftX
+  const diffY = rightY - leftY
+  const headAngle = Math.atan(diffY/diffX) * 180/Math.PI 
 
   return headAngle
 }
+
 function mean(array){
   let total = 0 
   array.forEach((element,index)=>{
@@ -96,11 +139,11 @@ function mean(array){
 function calculatDiff(array,offset){
   return array[array.length-1] - array[array.length + offset-1]
 }
+
 function checkHandLift(pose,noseHeight, eyeHeight, earsX){
 
   const leftHand = pose.keypoints[9]
   const rightHand = pose.keypoints[10]
-  console.log(leftHand.score, rightHand.score)
   if(
     Math.max(leftHand.score, rightHand.score) > wristScoreThreshold &&
     Math.max(leftHand.position.y,rightHand.position.y) < noseHeight + noseHeight*.35 &&
@@ -120,7 +163,6 @@ function checkHandLift(pose,noseHeight, eyeHeight, earsX){
       }
     });
     setTimeout(function() {
-      console.log("can lift again")
       handLiftTimeout = false;
     }, 2000);
   }
@@ -131,53 +173,70 @@ function calculateDistance(position1, position2){
   const dySquared = Math.pow(position1.y - position2.y,2)
   return Math.pow(dxSquared + dySquared, .5)
 }
-const vid = document.querySelector('#webcamVideo');
 
-//posenet
-var imageScaleFactor = 0.5;
-var outputStride = 16;
-var flipHorizontal = false;
-let net = null 
+function checkMotion(curEyeDistance,curEyeNoseY, headAngle){
 
-//tracking
-let topEyeY
-let bottomEyeY
-let eyeYRange 
-let restingHeadAngle
+  console.log("checking motion " ,curEyeDistance, curEyeNoseY, headAngle)
+  let gestures = []
+  if(
+    Math.abs(curEyeDistance - topEyeDistance) > topEyeDistance * .15  && 
+    Math.abs(curEyeNoseY - topEyeNoseY) > topEyeNoseY * .15
+  ){
+    console.log("walked")
+    gestures.push("walked")
+  }
 
-//triggers
-var tiltAngle = 16
-var scoreThreshold = .93
-var earScoreThreshold = .45
-const noseScoreThreshold = .95
-const wristScoreThreshold = .4
+  if(
+    Math.abs(curEyeNoseY - topEyeNoseY) > topEyeNoseY * .10
+  ){
+    console.log("tilted up down")
+    gestures.push("tiltedUpDown")
+  }
+  /*if(curEyeDistance < topEyeDistance && curEyeNoseY < topEyeNoseY){
+    console.log("walked back")
+  }*/
 
-let numLoops = 0
-var timeoutId = false
-let handLiftTimeout = false
-const handLiftThreshold = 120
-let gesturesOn = true
-let middleEyeDistance
-let lastFocusedTab = null
-const refreshRate = 80
-
+  return gestures
+}
+function calculateCenterOfMass(pose){
+  xCOM = (pose.keypoints[0].position.x + 
+         pose.keypoints[1].position.x +
+         pose.keypoints[2].position.x +
+         pose.keypoints[3].position.x +
+         pose.keypoints[4].position.x)/5
+  yCom = (pose.keypoints[0].position.y + 
+         pose.keypoints[1].position.y +
+         pose.keypoints[2].position.y +
+         pose.keypoints[3].position.y +
+         pose.keypoints[4].position.y)/5
+  console.log(yCom)
+}
 async function loop() {
   
-  if(net && bottomEyeY){
+  if(net && calibrated){
 
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+      //console.log(vid.height, vid.innerHeight,vid.clientHeight)
       
+      const curEyeY = vid.height - (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
+      const curEarY = vid.height - (pose.keypoints[3].position.y +  pose.keypoints[4].position.y)/2
+      const curEyeEarY = Math.abs(curEarY - curEyeY)
+      const curNoseY = vid.height - pose.keypoints[0].position.y
+      const curEyeNoseY = Math.abs(curEyeY - curNoseY)
+      const curShoulderY = vid.height - (pose.keypoints[5].position.y +  pose.keypoints[6].position.y)/2
       const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
+      const curEarDistance = calculateDistance(pose.keypoints[3].position, pose.keypoints[4 ].position) 
+      const curHeadAngleEyes =  calculateLeftRightHeadAngle(pose.keypoints[1],pose.keypoints[2])
+      const curHeadAngleEars =  calculateLeftRightHeadAngle(pose.keypoints[3],pose.keypoints[4])
+      const headAngle = mean([curHeadAngleEyes, curHeadAngleEars])
+
       if(
-        Math.abs(curEyeDistance- middleEyeDistance)/middleEyeDistance < .3 &&
+        Math.abs(curEyeDistance- topEyeDistance)/topEyeDistance < .3 &&
         pose.keypoints[1].score > scoreThreshold &&
         pose.keypoints[2].score > scoreThreshold && 
         gesturesOn 
       ){
-        curHeadAngleEyes =  calculateHeadAngle(pose.keypoints[1],pose.keypoints[2])
-        curHeadAngleEars =  calculateHeadAngle(pose.keypoints[3],pose.keypoints[4])
-        const headAngle = mean([curHeadAngleEyes, curHeadAngleEars])
-        //console.log("angles " ,headAngle, restingHeadAngle, headAngle- restingHeadAngle)
+        
 
         if(!timeoutId && headAngle - restingHeadAngle < -1*tiltAngle ){
           gesturesOn = !gesturesOn
@@ -186,7 +245,7 @@ async function loop() {
           setTimeout(function() {
             timeoutId = null;
             chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
-              chrome.tabs.sendMessage(tabs[0].id, {gesture : "back"});
+              //chrome.tabs.sendMessage(tabs[0].id, {gesture : "back"});
             });
             gesturesOn = !gesturesOn
           }, 1000);
@@ -197,7 +256,7 @@ async function loop() {
           console.log("forward",pose.keypoints[9].position.y, pose.keypoints[1].score )
           setTimeout(function() {
             chrome.tabs.query({"currentWindow": true,"active":true}, function(tabs) {
-              chrome.tabs.sendMessage(tabs[0].id, {gesture : "forward"});
+              //chrome.tabs.sendMessage(tabs[0].id, {gesture : "forward"});
             });
             headGesture = true
             gesturesOn = !gesturesOn
@@ -206,24 +265,24 @@ async function loop() {
           
         }
       }
-      const curEyeY = (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
+
       checkHandLift(pose, pose.keypoints[0].position.y, curEyeY, [pose.keypoints[3].position.x, pose.keypoints[4].position.x])
+
       if(
           Math.max(pose.keypoints[1].score,pose.keypoints[2].score) > scoreThreshold &&
           Math.max(pose.keypoints[3].score,pose.keypoints[4].score) > earScoreThreshold &&
           pose.keypoints[0].score > noseScoreThreshold
         ){
-        const meanCalibrationY = mean([bottomEyeY, topEyeY])
-        const diff = curEyeY- meanCalibrationY
         
+        const diff = curEyeY - referenceY
         if(
-          Math.abs(diff) < Math.max(5.3*eyeYRange, 16) && 
-          (diff > eyeYRange/2 || diff <  -1*.8*eyeYRange/2) && 
+          Math.abs(diff) < Math.max(6*referenceYRange, 16) && 
+          (diff > referenceYRange/2 || diff <  -1*referenceYRange/2) && 
           gesturesOn
         ){
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
             if(tabs.length > 0){
-              chrome.tabs.sendMessage(tabs[0].id, {change : Math.sign(diff)*Math.pow(Math.abs(diff) - Math.abs(topEyeY- meanCalibrationY), 2)/3 });
+              chrome.tabs.sendMessage(tabs[0].id, {change : -1*Math.sign(diff)*Math.pow(Math.abs(diff) - referenceYRange/2, 2)/3 });
             }  
           });
         }          
