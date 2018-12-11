@@ -18,6 +18,9 @@ let videoWidth
 let videoHeight
 let topY
 let bottom 
+let stop = false
+let stream 
+let calibrated = false
 console.log(document)
 function computeFrame(positions){
   let ctx1 = c1.getContext('2d');
@@ -68,20 +71,13 @@ function setupCam() {
       stream = s
       video.srcObject = s;
       video.play();
+      streaming = true
+
       console.log("stream set ")
     })
   .catch(function(err) {
     console.log("An error occured! " + err);
   });
-
-  video.addEventListener("canplay", function(ev){
-    if (!streaming) {
-      streaming = true
-      console.log("all set")
-      videoHeight = video.videoHeight
-      videoWidth = video.videoWidth
-    }
-  }, false);
 }
 
 function setCalibratedState(){
@@ -93,7 +89,40 @@ function setCalibratedState(){
   document.getElementById('calibrate-top').hidden = true 
   document.getElementById('calibrate-bottom').hidden = true 
   document.getElementById('webcamVideo').hidden = true
+  document.getElementById('stop').hidden = false
+  document.getElementById('toggleWebcam').hidden = false
 
+  calibrated = true
+
+}
+function stopCamera(){
+    if(!streaming) return;
+    console.log("stremaing state" ,streaming)
+    video.pause();
+    video.srcObject=null;
+    stream.getVideoTracks()[0].stop(); 
+    streaming = false   
+}
+function toggleStop(){
+  stop = !stop
+  if(stop){
+    chrome.runtime.sendMessage({stop: true});
+    stopCamera()
+    document.getElementById('calibrate').hidden = true
+    document.getElementById('webcamVideo').hidden = true
+    document.getElementById('stop').innerHTML = "Start Camera"
+    document.getElementById('calibrate-text').innerHTML = "Camera Off"
+
+  }else{
+    chrome.runtime.sendMessage({stop: false});
+    document.getElementById('stop').innerHTML = "Stop Camera"
+    document.getElementById('calibrate').hidden = false
+    if(!calibrated){
+      document.getElementById('webcamVideo').hidden = false
+    }
+    setupCam()
+  }
+  console.log("stopped state ", stop)
 }
 function calibrateClicked(){
 
@@ -107,21 +136,24 @@ function calibrateClicked(){
   document.getElementById('webcamVideo').hidden = true
 
 
-  console.log("calibrating")
 }
 function toggleWebcam(){
   document.getElementById('webcamVideo').hidden = !document.getElementById('webcamVideo').hidden 
   if(document.getElementById('webcamVideo').hidden){
     document.getElementById('toggleWebcam').innerHTML = "Show Webcam"
+    document.getElementById('examples').hidden = false 
+
   }else{
     document.getElementById('toggleWebcam').innerHTML = "Hide Webcam"
+    document.getElementById('examples').hidden = true 
+
   }
 }
 function spacePressed(){
   console.log("space pressed ", numSpace)
   if(numSpace == 1 && calibrating){
     chrome.runtime.sendMessage({calibrateTop: true});
-    document.getElementById('calibrate-text').innerHTML = "Tilt your HEAD to the BOTTOM of your reading area</br></br>press SPACE"
+    document.getElementById('calibrate-text').innerHTML = "Top Calibration Successful! </br></br> Tilt your HEAD to the BOTTOM of your reading area</br></br>press SPACE"
       document.getElementById('calibrate-top').hidden = true 
     document.getElementById('calibrate-bottom').hidden = false 
   }
@@ -131,7 +163,6 @@ function spacePressed(){
     calibrating = false
     setCalibratedState()
     chrome.storage.local.set({ 'calibrated': true });
-    document.getElementById('toggleWebcam').hidden = false
 
   }
 }
@@ -145,4 +176,6 @@ document.body.onkeyup = function(e){
 }
 setupCam();
 document.getElementById('calibrate').onclick = calibrateClicked;
+document.getElementById('stop').onclick = toggleStop;
+
 document.getElementById('toggleWebcam').onclick = toggleWebcam;

@@ -5,7 +5,7 @@ document.body.appendChild(bubbleDOM);
 bubbleDOM.style.visibility = 'hidden';
 bubbleDOM.id = "selectBubble"
 bubbleDOM.height = "200px";
-bubbleDOM.style.right = '10px';
+bubbleDOM.style.left = '10px';
 bubbleDOM.style.top = '10px';
 bubbleDOM.style.padding = '4px 8px';
 bubbleDOM.style.fontFamily = '"Helvetica Neue", sans-serif;' 

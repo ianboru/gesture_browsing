@@ -23,6 +23,7 @@ let referenceY
 var tiltAngle = 16
 var scoreThreshold = .93
 var earScoreThreshold = .45
+const earScoreMin = .3
 const noseScoreThreshold = .95
 const wristScoreThreshold = .4
 
@@ -32,9 +33,17 @@ let handLiftTimeout = false
 const handLiftThreshold = 120
 let gesturesOn = true
 let lastFocusedTab = null
-const refreshRate = 50
-const buffer = .60
+const refreshRate = 75
+const buffer = .8
 
+let lastEyeY
+let lastNoseY 
+let lastEarY 
+let diffEyeY 
+let diffEarY 
+let diffNoseY 
+let stream
+let streaming = false
 chrome.tabs.onActivated.addListener(function(activeInfo) {
   chrome.storage.local.get([activeInfo['windowId'] + "-" + activeInfo['tabId']], items => {
     if(!items[activeInfo['windowId'] + "-" + activeInfo['tabId']]){
@@ -72,6 +81,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onMessage.addListener((request) => {
+  console.log("background request ", request)
     if(request.calibrateTop){
       net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
            topNoseY = vid.height - pose.keypoints[0].position.y
@@ -91,30 +101,42 @@ chrome.runtime.onMessage.addListener((request) => {
     if(request.calibrateBottom){
 
       net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
-           bottomEyeY = mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
-           calibrationEyeYRange = Math.abs(topEyeY - bottomEyeY)*buffer
-           meanCalibrationY = mean([bottomEyeY, topEyeY])
-           referenceY = meanCalibrationY
-           referenceYRange = calibrationEyeYRange
-           calibrated = true
+         bottomEyeY = vid.height - mean([pose.keypoints[1].position.y,pose.keypoints[2].position.y])
+         calibrationEyeYRange = Math.abs(topEyeY - bottomEyeY)*buffer
+         meanCalibrationY = mean([bottomEyeY, topEyeY])
+         referenceY = meanCalibrationY
+         referenceYRange = calibrationEyeYRange
+         calibrated = true
+         console.log("calibrated Y, range",topEyeY, bottomEyeY, referenceY, referenceYRange)
+         lastEyeY = null
+         lastNoseY = null
+         lastEarY = null
+         diffEyeY = null
+         diffEarY = null
+         diffNoseY = null
        })
     }
+    if(request.hasOwnProperty('stop')){
+      console.log("found stop")
+      if(request.stop){
+        stopCamera()
+      }else{
+        setupCam()
+      }
+    }
 })
-setupCam();
+
 async function setupCam() {
   navigator.mediaDevices.getUserMedia({
     video: true
   }).then(mediaStream => {
     vid.srcObject = mediaStream;
+    stream = mediaStream
+    streaming = true
   }).catch((error) => {
     console.warn(error);
   });
-  posenet.load().then((data)=>{
-    console.log("loaded")
-    net = data
-    chrome.storage.local.set({ 'modelLoaded': true });
-  });
-  setTimeout(loop, 50);
+  
 }
 
 function calculateLeftRightHeadAngle(leftKeypoint, rightKeyPoint){
@@ -143,15 +165,22 @@ function calculatDiff(array,offset){
 function checkHandLift(pose,noseHeight, eyeHeight, earsX){
 
   const leftHand = pose.keypoints[9]
+  const leftHandHeight = vid.height - leftHand.position.y
   const rightHand = pose.keypoints[10]
+  const rightHandHeight = vid.height - rightHand.position.y
+  //console.log(leftHandHeight, rightHandHeight, noseHeight, earsX)
+  const offHeadCorrection = Math.abs(earsX[0]-earsX[1])*.8
+  const offHeadLimit = Math.abs(earsX[0]-earsX[1])*2.5
   if(
     Math.max(leftHand.score, rightHand.score) > wristScoreThreshold &&
-    Math.max(leftHand.position.y,rightHand.position.y) < noseHeight + noseHeight*.35 &&
-    Math.max(leftHand.position.y,rightHand.position.y) > eyeHeight &&
+    Math.max(leftHandHeight,rightHandHeight) > noseHeight - noseHeight*.45 &&
+    Math.max(leftHandHeight,rightHandHeight) < eyeHeight &&
     (
-    Math.max(leftHand.position.x,rightHand.position.x) > Math.max(earsX[0],earsX[1]) + Math.abs(earsX[0]-earsX[1]) * .50  ||
-    Math.min(leftHand.position.x,rightHand.position.x) < Math.min(earsX[0],earsX[1]) - Math.abs(earsX[0]-earsX[1]) * .50 
+    rightHand.position.x > Math.max(earsX[0],earsX[1]) + offHeadCorrection ||
+    leftHand.position.x < Math.min(earsX[0],earsX[1]) - offHeadCorrection
     ) &&
+    rightHand.position.x < Math.max(earsX[0],earsX[1]) + offHeadLimit &&
+    leftHand.position.x > Math.min(earsX[0],earsX[1]) - offHeadLimit &&
     !handLiftTimeout
   ){
     gesturesOn = !gesturesOn
@@ -173,57 +202,28 @@ function calculateDistance(position1, position2){
   const dySquared = Math.pow(position1.y - position2.y,2)
   return Math.pow(dxSquared + dySquared, .5)
 }
-
-function checkMotion(curEyeDistance,curEyeNoseY, headAngle){
-
-  console.log("checking motion " ,curEyeDistance, curEyeNoseY, headAngle)
-  let gestures = []
-  if(
-    Math.abs(curEyeDistance - topEyeDistance) > topEyeDistance * .15  && 
-    Math.abs(curEyeNoseY - topEyeNoseY) > topEyeNoseY * .15
-  ){
-    console.log("walked")
-    gestures.push("walked")
-  }
-
-  if(
-    Math.abs(curEyeNoseY - topEyeNoseY) > topEyeNoseY * .10
-  ){
-    console.log("tilted up down")
-    gestures.push("tiltedUpDown")
-  }
-  /*if(curEyeDistance < topEyeDistance && curEyeNoseY < topEyeNoseY){
-    console.log("walked back")
-  }*/
-
-  return gestures
+function stopCamera(){
+    if(!streaming) return;
+    console.log("stremaing state" ,streaming)
+    vid.pause();
+    vid.srcObject=null;
+    stream.getVideoTracks()[0].stop(); 
+    streaming = false   
 }
-function calculateCenterOfMass(pose){
-  xCOM = (pose.keypoints[0].position.x + 
-         pose.keypoints[1].position.x +
-         pose.keypoints[2].position.x +
-         pose.keypoints[3].position.x +
-         pose.keypoints[4].position.x)/5
-  yCom = (pose.keypoints[0].position.y + 
-         pose.keypoints[1].position.y +
-         pose.keypoints[2].position.y +
-         pose.keypoints[3].position.y +
-         pose.keypoints[4].position.y)/5
-  console.log(yCom)
-}
+
+
 async function loop() {
   
-  if(net && calibrated){
-
+  if(net && calibrated && stream){
+    let refChanged = false
      net.estimateSinglePose(vid,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
       //console.log(vid.height, vid.innerHeight,vid.clientHeight)
-      
+      curEarScore = [pose.keypoints[1].score, pose.keypoints[2].score ]
       const curEyeY = vid.height - (pose.keypoints[1].position.y +  pose.keypoints[2].position.y)/2
       const curEarY = vid.height - (pose.keypoints[3].position.y +  pose.keypoints[4].position.y)/2
-      const curEyeEarY = Math.abs(curEarY - curEyeY)
       const curNoseY = vid.height - pose.keypoints[0].position.y
+      const curEyeEarY = Math.abs(curEarY - curEyeY)
       const curEyeNoseY = Math.abs(curEyeY - curNoseY)
-      const curShoulderY = vid.height - (pose.keypoints[5].position.y +  pose.keypoints[6].position.y)/2
       const curEyeDistance = calculateDistance(pose.keypoints[1].position, pose.keypoints[2].position) 
       const curEarDistance = calculateDistance(pose.keypoints[3].position, pose.keypoints[4 ].position) 
       const curHeadAngleEyes =  calculateLeftRightHeadAngle(pose.keypoints[1],pose.keypoints[2])
@@ -234,7 +234,8 @@ async function loop() {
         Math.abs(curEyeDistance- topEyeDistance)/topEyeDistance < .3 &&
         pose.keypoints[1].score > scoreThreshold &&
         pose.keypoints[2].score > scoreThreshold && 
-        gesturesOn 
+        gesturesOn && 
+        !refChanged
       ){
         
 
@@ -271,18 +272,54 @@ async function loop() {
       if(
           Math.max(pose.keypoints[1].score,pose.keypoints[2].score) > scoreThreshold &&
           Math.max(pose.keypoints[3].score,pose.keypoints[4].score) > earScoreThreshold &&
+          Math.min(pose.keypoints[3].score,pose.keypoints[4].score) > earScoreMin &&
+
           pose.keypoints[0].score > noseScoreThreshold
         ){
-        
+         if(
+            numLoops > 5 && 
+            numLoops % 5 == 0
+          ){
+            diffEyeY = curEyeY - lastEyeY
+            diffEarY = curEarY - lastEarY
+            diffNoseY = curNoseY - lastNoseY
+            lastEyeY = curEyeY
+            lastNoseY = curNoseY
+            lastEarY = curEarY
+
+            if(
+              Math.abs(
+                Math.sign(diffEyeY) + Math.sign(diffEarY) + Math.sign(diffNoseY)
+              ) == 3 && 
+              Math.abs(diffEyeY - diffEarY) < referenceYRange*1.2 &&
+              Math.abs(diffNoseY - diffEarY) < referenceYRange && 
+              Math.abs(diffNoseY - diffEyeY) < referenceYRange && 
+              Math.abs(diffEyeY) > referenceYRange * .35 &&
+              Math.abs(diffEarY) > referenceYRange * .35 && 
+              Math.abs(diffNoseY) > referenceYRange * .35
+            ){
+              console.log("moved")
+              //referenceY = referenceY + diffEyeY
+              //refChanged = true
+            }
+        }
+          
+          
         const diff = curEyeY - referenceY
+        let topShortening = .85
+        if(diff > 0 ){
+          topShortening = .8
+        }
+
         if(
-          Math.abs(diff) < Math.max(6*referenceYRange, 16) && 
-          (diff > referenceYRange/2 || diff <  -1*referenceYRange/2) && 
+          Math.abs(diff) < Math.max(6*referenceYRange,20) && 
+          Math.abs(diff) > referenceYRange*topShortening && 
           gesturesOn
         ){
+          //"lastFocusedWindow": true,"active":true,"currentWindow":true
           chrome.tabs.query({"lastFocusedWindow": true,"active":true}, function(tabs) {
             if(tabs.length > 0){
-              chrome.tabs.sendMessage(tabs[0].id, {change : -1*Math.sign(diff)*Math.pow(Math.abs(diff) - referenceYRange/2, 2)/3 });
+              chrome.tabs.sendMessage(tabs[0].id, {change : -1*Math.sign(diff)*Math.pow(Math.abs(diff) - topShortening*referenceYRange/2, 2)/3 });
             }  
           });
         }          
@@ -293,4 +330,11 @@ async function loop() {
   }
   setTimeout(loop, refreshRate);
 }
+setupCam();
+posenet.load().then((data)=>{
+  console.log("loaded")
+  net = data
+  chrome.storage.local.set({ 'modelLoaded': true });
+});
+setTimeout(loop, refreshRate);
 
